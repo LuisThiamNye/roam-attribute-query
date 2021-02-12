@@ -1,6 +1,7 @@
 (ns attr-query.core
   (:require
    [clojure.string]
+   [clojure.set]
    [clojure.zip :as z]))
 
 (defn main []
@@ -52,17 +53,17 @@
 
 (comment
   (do (def db {:string "xx[[n]]"
-            :c      [{:string "yy::"
-                      :c      [{:string "zz[[b]]"}]}
-                     {:string "ol"
-                      :c      []}]})
+               :c      [{:string "yy::"
+                         :c      [{:string "zz[[b]]"}]}
+                        {:string "ol"
+                         :c      []}]})
 
-   (def zi (z/zipper (fn [node]
-                       (vector? (:c node)))
-                     (comp seq :c)
-                     (fn [node children]
-                       (update node :c conj children))
-                     db)))
+      (def zi (z/zipper (fn [node]
+                          (vector? (:c node)))
+                        (comp seq :c)
+                        (fn [node children]
+                          (update node :c conj children))
+                        db)))
   (z/children zi)
   (-> zi z/down z/down z/down z/children)
 
@@ -97,6 +98,24 @@
   (lazy-seq (z/node zi) nil)
 
   (into [] (map second) (re-seq #"\[\[(.*?)\]\]" "nn[[x]]"))
+
+  (defn parse-clause-str [s]
+    (re-find #"(\S)\[\[(.*?)\]\]"))
+  (parse-clause-str "?e [[has]] ?x")
+  (parse-clause-str "")
+
+  (def results [{:a []}])
+
+  @(dr/q '[:find ?e
+           :in $ ?e-str ?a-name
+           :where
+           (and (or [?e :node/title ?e-str]
+                    [?e :block/uid ?e-str])
+                [?a :node/title ?a-name]
+                [?e :entity/attrs [_ _ _]])]
+         e-str a-name)
+
+  (clojure.set/intersection #{{:a 44}} #{{:a 44}})
 
   ;;;;;;;;
   )
