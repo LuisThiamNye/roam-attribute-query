@@ -7,4 +7,4 @@
                               :output-feature-set :es-next}
            :devtools {:http-root "resources/public"
                       :http-port 8021}
-           :modules {:main {:entries [attr-query.core]}}}}}
+           :modules {:main {:entries [attr-query.scratchpad]}}}}}

@@ -1,11 +1,8 @@
-(ns attr-query.core
+(ns attr-query.scratchpad
   (:require
    [clojure.string]
    [clojure.set]
    [clojure.zip :as z]))
-
-(defn main []
-  (js/console.log "ey"))
 
 (defn probe [x] (js/console.log x) (prn x) x)
 
@@ -100,7 +97,7 @@
   (into [] (map second) (re-seq #"\[\[(.*?)\]\]" "nn[[x]]"))
 
   (defn parse-clause-str [s]
-    (re-find #"(\S)\[\[(.*?)\]\]"))
+    (re-find #"(\S)\[\[(.*?)\]\]" ""))
   (parse-clause-str "?e [[has]] ?x")
   (parse-clause-str "")
 
@@ -119,16 +116,42 @@
 
   (defn next-one [x]
     (lazy-seq (cons x (next-one (inc x)))))
-(def x (next-one 0))
-(time (second x))
-(time (-> x next next second))
+  (def x (next-one 0))
+  (time (second x))
+  (time (-> x next next second))
 
-(def y x)
-(time (-> y next seconkd))
+  (def y x)
+  (time (-> y next seconkd))
 
-(def x #{3 4})
+  (def x #{3 4})
 
-(x 4)
+  (x 4)
+
+  (defn q [_]
+    (let [x (r/atom [])]
+      (fn [_]
+        [:div
+         [:button
+          {:on-click (fn [_]
+                       (reset!
+                        x
+                        (-> (d/q '[:find ?e :where
+                                   [?e :node/title "sauce"]])
+                            (subvec 0 20))))}
+          "Query"]
+         [:ul
+          (map (fn [line]
+                 [:li (prn-str line)])
+               @x)]])))
+
 
   ;;;;;;;;
+  )
+
+(comment
+  (def preds [even?])
+  (every? #(% 2) preds)
+
+
+  ;;;;;;;
   )

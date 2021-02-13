@@ -111,22 +111,27 @@
            [?e :block/uid ?uid]]
          (:block-uid b)))
 
+(defn get-entities []
+  (into []
+        (map
+         (comp #(select-keys % [:entity/attrs :block/uid :db/id]) d/entity :e))
+        (d/datoms :aevt :block/uid)))
+
 (defn component [b q-block]
-  (let [q-blocks (:block/children (d/pull '[:block/string :block/refs {:block/children ...}] (render-eid b)))
-        entities (into []
-                       (map
-                        (comp #(select-keys % [:entity/attrs :block/uid :db/id]) d/entity :e))
-                       (d/datoms :aevt :block/uid))]
-    [:div "Query results:"
-     [:ul
-      (map
-       (fn [d]
-         (let [e (select-keys (d/entity (:db/id d))
-                              [:block/string :node/title])
-               nature (if (contains? e :block/string) "Block" "Page")
-               content (or (:node/title e) (:block/string e))]
-           [:li
-            nature ": "
-            [:a {:href (str "#/app/" db-name "/page/" (:block/uid d))}
-             content]]))
-       (parse-query q-blocks entities))]]))
+  (let [results (r/atom [])]
+    (fn [b q-block]
+      (let [q-blocks (:block/children (d/pull '[:block/string :block/refs {:block/children ...}] (render-eid b)))]
+        [:div [:button {:on-click (fn [] (reset! results
+                                                 (parse-query q-blocks (get-entities))))} "Query results:"]
+         [:ul
+          (map
+           (fn [d]
+             (let [e (select-keys (d/entity (:db/id d))
+                                  [:block/string :node/title])
+                   nature (if (contains? e :block/string) "Block" "Page")
+                   content (or (:node/title e) (:block/string e))]
+               [:li
+                nature ": "
+                [:a {:href (str "#/app/" db-name "/page/" (:block/uid d))}
+                 content]]))
+           @results)]]))))
