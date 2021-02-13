@@ -7,5 +7,4 @@
                               :output-feature-set :es-next}
            :devtools {:http-root "resources/public"
                       :http-port 8021}
-           :modules {:main {:entries [attr-query.core]
-                            :init-fn attr-query.core/main}}}}}
+           :modules {:main {:entries [attr-query.core]}}}}}
