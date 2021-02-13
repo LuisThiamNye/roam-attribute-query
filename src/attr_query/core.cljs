@@ -1,121 +1,132 @@
 (ns attr-query.core
   (:require
-   [clojure.string]
    [clojure.set]
-   [clojure.zip :as z]))
+   [reagent.core :as r]
+   [roam.datascript :as d]
+   [roam.datascript.reactive :as dr]))
 
-(defn main []
-  (js/console.log "ey"))
+(def db-name "LuisThiamNye")
 
-(defn probe [x] (js/console.log x) (prn x) x)
+(defn conjv [coll x] (if (nil? coll) [x] (conj coll x)))
+(defn conjset [coll x] (if (nil? coll) #{x} (conj coll x)))
 
-(defn block-string [zipper]
-  (-> zipper  z/node  :string ))
+(defn link-attr-block-uid [link]
+  (-> link second :value peek))
 
-(defn block-parent [zipper]
-  (or (z/up zipper)
-      "PAGE"))
+(defn link-value [link]
+  (-> link peek :value))
 
-(defn zip-seq [child]
-  (when (some? child)
-    (lazy-seq (cons child (zip-seq (z/right child))))))
+(defn link-value-block-uid [link]
+  (let [v (link-value link)]
+    (when (vector? v)
+      (peek v))))
 
-(defn block-children [zipper]
-  (when (z/branch? zipper)
-    (zip-seq
-     (z/down zipper))))
+(defn intersect-pred [q var-id pred]
+  (update-in q [:specs var-id] conjv pred))
 
-(defn page? [node]
-  (string? node))
+;; Filter the v
+(defn ea-constraint [q s all-es]
+  (when-some [[_ e-id a-name var-id]
+              (re-find #"^\s*\[\[(.*?)\]\]\s+\[\[(.*?)\]\]\s+(.*?)\s*$" s)]
+    (let [target-e (some (fn [e]
+                           (when (identical? e-id (or (:node/title e) (:block/uid e)))
+                             e))
+                         all-es)
+          allowed-vs (group-by string? (into []
+                                             (comp
+                                              (filter #(-> % link-attr-block-uid (identical? a-name)))
+                                              (map (comp #(if (string? %)
+                                                            %
+                                                            (d/pull '[:block/uid] %))
+                                                         link-value)))
+                                             (:entity/attrs target-e)))
+          allowed? (fn [e]
+                     (if (string? e)
+                       (some #{e} (get allowed-vs true))
+                       (= (:db/id e) (:db/id (get allowed-vs false)))))]
+      (intersect-pred q var-id allowed?))))
 
-(defn page-name [node] node)
-(defn page-refs [string]
-  (into [] (map second) (re-seq #"\[\[(.*?)\]\]" string)))
+(defn uid-from-title [title]
+  (d/q '[:find ?uid .
+         :in $ ?title
+         :where
+         [?e :node/title ?title]
+         [?e :block/uid ?uid]]
+       title))
 
-(defn add-link [links node]
+;; Filter the e
+(defn av-constraint [q s all-es]
+  (when-some [[_ e-id a-name v-str]
+              (re-find #"^\s*(\S+)\s+\[\[(.+?)\]\]\s+(.+?)\s*$" s)]
+    (let [v-page-names (some->> (re-seq #"\[\[(.*?)\]\]" v-str)
+                               (map second))
+          v-uids (into #{}
+                       (map (fn [name]
+                              (uid-from-title name)))
+                       v-page-names)
+          allowed-v? (if (nil? v-page-names)
+                       #(identical? v-str (link-value %))
+                       (comp v-uids link-value-block-uid))
+          a-uid (uid-from-title a-name)
+          allowed? (fn [e]
+                     (some (fn [link]
+                             (and (identical? a-uid (link-attr-block-uid link))
+                                  (allowed-v? link)))
+                           (:entity/attrs e)))]
+      (intersect-pred q e-id allowed?))))
 
-  (let  [[_ attr value-str] (re-find #"^(.+?)::(.*)" (block-string node))]
-    (if (clojure.string/blank? attr)
-      links
-      (let [parent (block-parent node)
-            parent-pages (if (page? parent)
-                           [(page-name parent)]
-                           (page-refs (block-string parent)))
-            children-pages (if (clojure.string/blank? value-str)
-                             (into []
-                                   (mapcat (comp page-refs block-string))
-                                   (block-children node))
-                             (page-refs value-str))]
-        (if (every? pos? [(count children-pages) (count parent-pages)])
-          (assoc links attr (conj (or (get links attr) [])
-                                  [parent-pages children-pages]))
-          links)))))
+(defn a-constraint [q s]
+  (when-some [[_ e-id a-name spec-str]
+              (re-find #"^\s*(\S+)\s+\[\[(.+?)\]\]\s+(.+?)\s*$" s)]))
 
-(comment
-  (do (def db {:string "xx[[n]]"
-               :c      [{:string "yy::"
-                         :c      [{:string "zz[[b]]"}]}
-                        {:string "ol"
-                         :c      []}]})
-
-      (def zi (z/zipper (fn [node]
-                          (vector? (:c node)))
-                        (comp seq :c)
-                        (fn [node children]
-                          (update node :c conj children))
-                        db)))
-  (z/children zi)
-  (-> zi z/down z/down z/down z/children)
-
-  (type (z/node zi))
-
-  (-> zi z/children)
-
-  (-> zi z/down z/branch?)
-  (-> zi z/branch?)
-
-  (loop [zipper    zi
-         links     {}
-         forwards? true]
-    (let [counter (atom 0)]
-      (swap! counter inc)
-      (when (< @counter 100)
-        (let [new-links           (if forwards?
-                                    (add-link links zipper)
-                                    links)]
-          (if-some [[zn next-forwards?] (or (when-some [zn (or (when forwards? (z/down zipper))
-                                                               (z/right zipper))]
-                                              [zn  true])
-                                            (when-some [zn (z/up zipper)]
-                                              [zn  false]))]
-            (recur zn new-links next-forwards?)
-            new-links)))))
-
+(defn eval-var [preds all-blocks]
   (into []
-        (mapcat (comp page-refs block-string #(doto % prn)))
-        (block-children (-> zi z/down)))
-  (zip-seq (-> zi z/down z/down))
-  (lazy-seq (z/node zi) nil)
+        (comp (filter (fn [block]
+                        (every? #(% block) preds)))
+              (take 10))
+        all-blocks))
 
-  (into [] (map second) (re-seq #"\[\[(.*?)\]\]" "nn[[x]]"))
+(defn parse-clause-fn [all-es]
+  (fn [q b]
+  (let [s (:block/string b)]
+    (js/console.log "parsing" (prn-str b))
+    (or
+     (ea-constraint q s all-es)
+     (av-constraint q s all-es)
+     q))))
 
-  (defn parse-clause-str [s]
-    (re-find #"(\S)\[\[(.*?)\]\]"))
-  (parse-clause-str "?e [[has]] ?x")
-  (parse-clause-str "")
+(defn parse-query [q-blocks e-blocks]
+  (let [return-id (-> q-blocks first :block/string)
+        query (reduce (parse-clause-fn (into []
+                                             (filter #(contains? % :entity/attrs))
+                                             e-blocks))
+                      {:specs {}}
+                      (rest q-blocks))]
+    (-> query :specs (get return-id) (eval-var e-blocks))))
 
-  (def results [{:a []}])
-
-  @(dr/q '[:find ?e
-           :in $ ?e-str ?a-name
+(defn render-eid [b]
+  (d/q '[:find ?e .
+           :in $ ?uid
            :where
-           (and (or [?e :node/title ?e-str]
-                    [?e :block/uid ?e-str])
-                [?a :node/title ?a-name]
-                [?e :entity/attrs [_ _ _]])]
-         e-str a-name)
+           [?e :block/uid ?uid]]
+         (:block-uid b)))
 
-  (clojure.set/intersection #{{:a 44}} #{{:a 44}})
-
-  ;;;;;;;;
-  )
+(defn component [b q-block]
+  (let [q-blocks (:block/children (d/pull '[:block/string :block/refs {:block/children ...}] (render-eid b)))
+        entities (into []
+                       (map
+                        (comp #(select-keys % [:entity/attrs :block/uid :db/id]) d/entity :e))
+                       (d/datoms :aevt :block/uid))]
+    [:div "Query results:"
+     [:ul
+      (map
+       (fn [d]
+         (let [e (select-keys (d/entity (:db/id d))
+                              [:block/string :node/title])
+               nature (if (contains? e :block/string) "Block" "Page")
+               content (or (:node/title e) (:block/string e))]
+           [:li
+            nature ": "
+            [:a {:href (str "#/app/" db-name "/page/" (:block/uid d))}
+             content]]))
+       (parse-query q-blocks entities))]]))
