@@ -2,6 +2,9 @@
 
 Just playing around. Might be useful.
 
-Threads of thought:
+![](https://pbs.twimg.com/media/EuHwsCAWgAk5o9h?format=png&name=900x900)
 
-<blockquote class="twitter-tweet"><p lang="en" dir="ltr">Querying blocks/pages by their attributes <a href="https://t.co/hpN1lRA3aB">pic.twitter.com/hpN1lRA3aB</a></p>&mdash; Luis Thiam-Nye (@LuisThiamNye) <a href="https://twitter.com/LuisThiamNye/status/1360633555626393602?ref_src=twsrc%5Etfw">February 13, 2021</a></blockquote>
+Threads of thought:
+https://twitter.com/LuisThiamNye/status/1360633555626393602
+
+If anyone is interested in using something like this, please let me know so I can take this more seriously.
