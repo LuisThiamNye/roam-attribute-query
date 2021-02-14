@@ -5,7 +5,7 @@
    [roam.datascript :as d]
    [roam.datascript.reactive :as dr]))
 
-(def db-name "LuisThiamNye")
+(def db-name (second (re-find #"#/app/(.+?)/.*" js/window.location.hash)))
 
 (defn conjv [coll x] (if (nil? coll) [x] (conj coll x)))
 (defn conjset [coll x] (if (nil? coll) #{x} (conj coll x)))
@@ -27,7 +27,7 @@
 ;; Filter the v
 (defn ea-constraint [q s all-es]
   (when-some [[_ e-id a-name var-id]
-              (re-find #"^\s*\[\[(.*?)\]\]\s+\[\[(.*?)\]\]\s+(.*?)\s*$" s)]
+              (re-find #"^\s*\[\[(.+?)\]\]\s+\[\[(.+?)\]\]\s+(.+?)\s*$" s)]
     (let [target-e (some (fn [e]
                            (when (identical? e-id (or (:node/title e) (:block/uid e)))
                              e))
@@ -58,7 +58,7 @@
 (defn av-constraint [q s all-es]
   (when-some [[_ e-id a-name v-str]
               (re-find #"^\s*(\S+)\s+\[\[(.+?)\]\]\s+(.+?)\s*$" s)]
-    (let [v-page-names (some->> (re-seq #"\[\[(.*?)\]\]" v-str)
+    (let [v-page-names (some->> (re-seq #"\[\[(.+?)\]\]" v-str)
                                (map second))
           v-uids (into #{}
                        (map (fn [name]
@@ -74,10 +74,6 @@
                                   (allowed-v? link)))
                            (:entity/attrs e)))]
       (intersect-pred q e-id allowed?))))
-
-(defn a-constraint [q s]
-  (when-some [[_ e-id a-name spec-str]
-              (re-find #"^\s*(\S+)\s+\[\[(.+?)\]\]\s+(.+?)\s*$" s)]))
 
 (defn eval-var [preds all-blocks]
   (into []
@@ -102,7 +98,7 @@
                                              e-blocks))
                       {:specs {}}
                       (rest q-blocks))]
-    (-> query :specs (get return-id) (eval-var e-blocks))))
+    (some-> query :specs (get return-id) (eval-var e-blocks))))
 
 (defn render-eid [b]
   (d/q '[:find ?e .
